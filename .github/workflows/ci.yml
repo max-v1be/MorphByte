@@ -1,0 +1,31 @@
+name: MorphByte verification
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        node: [22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run build
+      - run: npm run check
+      - run: npm test
+      - run: bun test --timeout 30000 packages/tests/core.test.mjs packages/tests/reliability.test.mjs
+      - run: bun run scripts/bun-smoke.mjs
+      - run: npm run build:native
+      - run: node scripts/native-smoke.cjs
+      - run: bun run scripts/native-smoke.cjs
+      - run: node examples/basic.mjs
+      - run: node examples/custom-formats.mjs
+      - run: npm audit --omit=dev
+      - run: npm pack --workspace morphbyte --dry-run

@@ -1,0 +1,40 @@
+{
+  "name": "morphbyte",
+  "version": "0.1.0",
+  "description": "Image, PDF and structured-data conversion for Node.js and Bun",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "dependencies": {
+    "sharp": "^0.35.5",
+    "@hyzyla/pdfium": "^2.1.0",
+    "pdf-lib": "^1.17.1",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "@fontsource/noto-sans": "^5.2.8",
+    "yaml": "^2.8.1",
+    "fast-xml-parser": "^5.3.2",
+    "smol-toml": "^1.4.2",
+    "csv-parse": "^7.0.3",
+    "csv-stringify": "^6.6.0"
+  }
+}

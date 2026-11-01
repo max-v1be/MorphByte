@@ -1,0 +1,15 @@
+# Security boundaries
+
+MorphByte is a development preview. It has explicit defenses and tests, but has not undergone an independent security audit, fuzz campaign, leak qualification or hostile-input production certification.
+
+Defaults: 64 MiB input, 128 MiB aggregate output, 40 million image pixels, 100 pages/frames, 200× decompression (1 KiB minimum budget), 30-second queued computation deadline, two worker threads and 64 waiting jobs. Buffers are not streamed. V8 heap ceilings do not cap libvips/PDFium/native allocations. Native codec faults can terminate the shared process; use an application-level OS process/container boundary for untrusted workloads needing fault isolation.
+
+Input signatures precede extensions. Recognized images are metadata-validated before envelope/copy; decode routes validate pixels through the codec. PDF copies are opened with PDFium. These are not exhaustive integrity checks. Checksums protect envelope consistency, not authenticity; they are not signatures. Envelopes reject unsupported versions, wrong type/length/target/hash. Base64 decoding checks canonical bytes and rejects unknown or mismatched decoded signatures.
+
+Network sources are rejected. SVG scripts, event attributes, entities, foreign objects and external `href`/`url()` resources are rejected conservatively; SVG support is intentionally restricted. XML rejects DTD and entity declarations; YAML alias expansion is bounded. No macros, shell interpolation, external document software or untrusted native plugins are executed by built-in conversions. Custom converters are executable trusted application code and are not sandboxed.
+
+Output is staged in exclusive same-directory temporary files, flushed, then atomically linked into a previously absent destination. Explicit `overwrite:true` uses rename; input/output aliases and hardlinks remain prohibited. Existing output symlinks and symlink/junction ancestors are rejected. Parent-directory validation has a time-of-check/time-of-use window: callers must not grant a hostile actor concurrent write/rename access to output parents. Temporary files are best-effort cleaned; process kill/power loss can leave them. Directory creation is intentional and may remain after an aborted job.
+
+Multi-file output commits are atomic per file, not all-or-nothing. Completed page files can remain if a later commit fails; no unrelated file is removed to roll back a partial conversion. A result is returned only after all requested outputs are committed. The compute timeout does not interrupt filesystem commits; AbortSignal is checked between commit operations. A file already committed immediately before abort remains valid.
+
+`npm audit` reported zero known dependency vulnerabilities after updating the dependency set during implementation. This is a point-in-time package audit and does not prove absence of vulnerabilities in all bundled C/C++ codecs. Keep the lockfile/codecs updated and review upstream advisories. CI runs audit again. License/distribution review is tracked separately in third-party notices.

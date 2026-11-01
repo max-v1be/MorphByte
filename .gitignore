@@ -1,0 +1,41 @@
+node_modules/
+.npm-cache/
+build/
+dist/
+packages/morphbyte/docs/
+packages/morphbyte/README.md
+packages/morphbyte/CONTRIBUTING.md
+packages/morphbyte/LICENSE
+packages/morphbyte/THIRD_PARTY_NOTICES.md
+*.tgz
+benchmark-results.json
+.test-output/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+.aws/
+.codex/
+.agents/
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+
+# Logs, coverage and native build artifacts
+*.log
+coverage/
+.nyc_output/
+*.node
+*.obj
+*.o
+*.pdb
+*.ilk
+*.dmp
+CMakeUserPresets.json
