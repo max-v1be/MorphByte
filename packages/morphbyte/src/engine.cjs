@@ -427,10 +427,16 @@ function createConverter({
 
   const saved = cloneOptions(defaults),
     formats = Object.fromEntries(
-      Object.entries(formatDefaults).map(([k, v]) => [k, cloneOptions(v)]),
+      Object.entries(formatDefaults).map(([k, v]) => [
+        registry.normalize(k),
+        cloneOptions(v),
+      ]),
     ),
     routes = Object.fromEntries(
-      Object.entries(routeDefaults).map(([k, v]) => [k, cloneOptions(v)]),
+      Object.entries(routeDefaults).map(([k, v]) => [
+        k.split(":").map(registry.normalize).join(":"),
+        cloneOptions(v),
+      ]),
     );
   const layers = async (input, output, options) =>
   {
@@ -478,15 +484,21 @@ function createConverter({
       convertWith(await layers(input, output, options), input, output, options),
     convertBuffer: (input, output, options) =>
       convertBufferWith(instance.convert, input, output, options),
-    getDefaultOptions: (args = {}) =>
-      publicOptions(
+    getDefaultOptions: ({ from, to } = {}) =>
+    {
+      const targetFormat = registry.normalize(to || "json");
+      const sourceFormat = registry.normalize(from);
+
+      return publicOptions(
         resolve(
-          args.to || "json",
+          targetFormat,
           saved,
-          formats[args.to],
-          routes[`${args.from}:${args.to}`],
+          formats[targetFormat],
+          routes[`${sourceFormat}:${targetFormat}`],
         ).options,
-      ),
+      );
+    },
+
   };
 
   return instance;

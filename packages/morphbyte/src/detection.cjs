@@ -278,7 +278,7 @@ async function readInput(input, o)
     b = await wrap(b, wrapper, false, o);
   }
 
-  const detected = detectBytes(b, o.from || hint);
+  const detected = detectBytes(b, normalize(o.from || hint));
 
   if (o.from && normalize(o.from) !== detected.format)
   {

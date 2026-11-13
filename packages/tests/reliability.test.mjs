@@ -275,6 +275,60 @@ test("convertBuffer rejects file targets before conversion or filesystem writes"
 
 });
 
+test("configured defaults normalize format aliases in keys, queries and source hints", async () =>
+{
+  const input = await image();
+
+  for (const [formatKey, routeKey] of [
+    ["jpeg", "png:jpeg"],
+    ["JPG", "PNG:JPG"],
+  ])
+  {
+    const converter = m.createConverter({
+      formatDefaults: { [formatKey]: { compression: { quality: 33 } } },
+
+      routeDefaults: { [routeKey]: { compression: { quality: 44 } } },
+
+    });
+
+    for (const to of ["jpeg", "jpg", "JPG"])
+    {
+      assert.equal(converter.getDefaultOptions({ to }).compression.quality, 33);
+      assert.equal(
+        converter.getDefaultOptions({ from: "PNG", to }).compression.quality,
+        44,
+      );
+
+      const result = await converter.convert(input, { format: to });
+
+      assert.equal(result.effectiveOptions.compression.quality, 44);
+      assert.equal((await sharp(result.outputs[0].bytes).metadata()).format, "jpeg");
+    }
+
+  }
+
+  const converter = m.createConverter({
+    formatDefaults: { JSON: { metadata: "strip" } },
+
+    routeDefaults: { "YML:JSON": { timeoutMs: 2345 } },
+
+  });
+
+  assert.equal(converter.getDefaultOptions().metadata, "strip");
+  assert.equal(converter.getDefaultOptions({ from: "yaml", to: "json" }).timeoutMs, 2345);
+  const result = await converter.convert(
+    Buffer.from("name: alias fixture"),
+    { format: "JSON" },
+
+    { from: "YML" },
+
+  );
+
+  assert.equal(result.effectiveOptions.timeoutMs, 2345);
+  assert.equal(result.sourceFormat, "yaml");
+  assert.equal(JSON.parse(Buffer.from(result.outputs[0].bytes)).name, "alias fixture");
+});
+
 test("build info reports the package manifest version", async () =>
 {
   const manifest = JSON.parse(

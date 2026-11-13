@@ -18,6 +18,17 @@ Animation preservation, complete transformation breadth, optional document/prese
 
 ## Validation record
 
+### Unreleased review fixes — 2026-11-13
+
+Five separate fixes address invalid graph costs, ignored same-format compression modes, configured buffer route inspection, filesystem side effects from invalid buffer output targets, and inconsistent format aliases. Six regression tests were added.
+
+Verified on Windows x64 with Node 26.10.0 and Bun 1.4.4:
+
+- Node and Bun: 48 tests passed in each runtime, 0 failed, 0 skipped.
+- JavaScript/declarations build, formatting, TypeScript `tsc --noEmit` and `git diff --check`: passed.
+- ESM/CJS image/PDF/envelope, responsive batch and cancellation smoke checks: passed in both runtimes.
+- Package version remains 0.1.1; these fixes are tracked under `Unreleased` in the changelog. No native build, Linux CI run or new benchmark was performed for these fixes.
+
 ### v0.1.1 — 2026-11-13
 
 Verified locally on Windows x64 with Node 26.10.0 and Bun 1.4.4:
