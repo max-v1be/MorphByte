@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Reject negative, non-finite and nonnumeric custom converter costs before registration. Zero-cost cycles terminate and valid fractional costs remain supported.
+
 ## 0.1.1 — 2026-11-13
 
 - Apply `metadata: "strip"` from converter global, format and route defaults to same-format image conversions. Per-call overrides retain their precedence; unchanged conversions still copy exact bytes.

@@ -17,6 +17,61 @@ const image = () =>
     .toBuffer();
 const hasCode = (code) => (e) => e.code === code;
 
+test("custom route costs reject invalid values and zero-cost cycles terminate", async () =>
+{
+  const ids = ["costa", "costb", "costc", "costunreachable"];
+
+  try
+  {
+    for (const id of ids)
+    {
+      m.registerFormat({ id, extensions: [id], mimeTypes: [`application/x-${id}`] });
+
+    }
+
+    const convert = async ({ input }) => input;
+
+    for (const cost of [-1, -Infinity, Infinity, NaN, null, "1"])
+    {
+      assert.throws(
+        () => m.registerConverter({ from: "costa", to: "costb", cost, convert }),
+
+        TypeError,
+      );
+    }
+
+    m.registerConverter({ from: "costa", to: "costb", cost: 0, convert });
+
+    m.registerConverter({ from: "costb", to: "costa", cost: 0, convert });
+
+    m.registerConverter({ from: "costb", to: "costc", cost: 0.5, convert });
+
+    m.registerConverter({ from: "costa", to: "costc", convert });
+
+    assert.equal(m.canConvert("costa", "costunreachable"), false);
+
+    const result = await m.convert(
+      Buffer.from("route fixture"),
+      { format: "costc" },
+
+      { from: "costa" },
+
+    );
+
+    assert.deepEqual(result.conversionPath, ["costa", "costb", "costc"]);
+  }
+
+  finally
+  {
+    for (const id of ids)
+    {
+      m.unregisterFormat(id);
+    }
+
+  }
+
+});
+
 test("build info reports the package manifest version", async () =>
 {
   const manifest = JSON.parse(

@@ -282,6 +282,7 @@ export interface CustomConverter
   id?: string;
   from: string;
   to: string;
+  /** Finite nonnegative route cost; defaults to 1. */
   cost?: number;
   fidelity?: Fidelity;
   canConvert?: (ctx: {

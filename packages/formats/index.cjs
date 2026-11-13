@@ -176,7 +176,8 @@ function registerConverter(c)
     !c ||
     !formats.has(c.from) ||
     !formats.has(c.to) ||
-    typeof c.convert !== "function"
+    typeof c.convert !== "function" ||
+    (c.cost !== undefined && (!Number.isFinite(c.cost) || c.cost < 0))
   )
   {
     throw new TypeError("MorphByte: invalid converter");
