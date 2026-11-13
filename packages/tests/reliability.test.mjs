@@ -72,6 +72,57 @@ test("custom route costs reject invalid values and zero-cost cycles terminate", 
 
 });
 
+test("explicit compression modes re-encode same-format images at every defaults layer", async () =>
+{
+  const input = await sharp(await image())
+    .png({ compressionLevel: 0 })
+
+    .toBuffer();
+  const cases = [
+    [m, { mode: "smallest" }],
+
+    [m.createConverter({ defaults: { mode: "smallest" } }), {}],
+
+    [m.createConverter({ formatDefaults: { png: { mode: "smallest" } } }), {}],
+
+    [m.createConverter({ routeDefaults: { "png:png": { mode: "smallest" } } }), {}],
+
+  ];
+
+  for (const [converter, options] of cases)
+  {
+    const result = await converter.convert(input, { format: "png" }, options);
+    const output = Buffer.from(result.outputs[0].bytes);
+
+    assert.equal(result.backend, "sharp/libvips");
+    assert.equal(result.effectiveOptions.compression.level, 9);
+    assert.ok(output.length < input.length);
+    assert.deepEqual(
+      await sharp(output).raw().toBuffer(),
+      await sharp(input).raw().toBuffer(),
+    );
+  }
+
+  const converter = m.createConverter({ defaults: { mode: "smallest" } });
+
+  const overridden = await converter.convert(
+    input,
+    { format: "png" },
+
+    { mode: "fastest" },
+
+  );
+
+  assert.equal(overridden.effectiveOptions.compression.level, 1);
+  assert.equal(overridden.backend, "sharp/libvips");
+  assert.deepEqual(Buffer.from(await m.convertBuffer(input, "png")), input);
+  assert.deepEqual(
+    Buffer.from(await m.convertBuffer(input, "png", { mode: undefined })),
+
+    input,
+  );
+});
+
 test("build info reports the package manifest version", async () =>
 {
   const manifest = JSON.parse(

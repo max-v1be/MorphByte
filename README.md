@@ -84,7 +84,7 @@ const converter = createConverter({
 
 Options are optional, including `compression:{}`. Precedence is call > route defaults > target-format defaults > consumer defaults > built-in format/global defaults. Consumer defaults are isolated. Unknown or unsupported options fail rather than being silently ignored. Custom adapters execute trusted JavaScript; they must cooperate with cancellation and avoid blocking the event loop.
 
-An effective `metadata:"strip"` policy also re-encodes same-format images when inherited from converter defaults. Without requested changes, same-format conversion remains an exact byte copy. Both `resolveOptions()` and `convert()` reject conflicting output suffixes and compression algorithms; compressed file outputs require the matching compound suffix such as `.json.gz` or `.json.br`.
+An effective `metadata:"strip"` policy also re-encodes same-format images when inherited from converter defaults. An explicitly selected `mode`, whether passed directly or inherited from converter defaults, also requests re-encoding. Without requested changes, same-format conversion remains an exact byte copy. Both `resolveOptions()` and `convert()` reject conflicting output suffixes and compression algorithms; compressed file outputs require the matching compound suffix such as `.json.gz` or `.json.br`.
 
 Results contain `outputs[]`, source/target formats, selected route, fidelity, backend, resolved options, codec selection, warnings, byte counts and duration. File outputs return paths/sizes; `{format:"webp"}` returns bytes. `convertBuffer` returns a single `Uint8Array`. Batch results preserve item order and include each error; `continueOnError` defaults to false.
 

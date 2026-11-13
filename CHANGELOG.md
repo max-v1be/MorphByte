@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Reject negative, non-finite and nonnumeric custom converter costs before registration. Zero-cost cycles terminate and valid fractional costs remain supported.
+- Honor explicitly selected compression modes for same-format conversions, including modes inherited from converter defaults. Calls without requested changes retain exact byte copies.
 
 ## 0.1.1 — 2026-11-13
 

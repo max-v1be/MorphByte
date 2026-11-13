@@ -236,15 +236,12 @@ async function convertWith(defaults, input, output, options)
       fail("UNSUPPORTED_CONVERSION", `No registered converter ${hint} -> ${dest.format}`);
     }
 
-    const combined = merge(defaults, options),
-      requestedCompression = {
-        ...defaults?.compression,
-        ...options?.compression,
-      };
+    const requested = mergeConfigured(defaults, options);
 
     const modify =
-      Object.keys(requestedCompression).some((k) => k !== "container") ||
-      combined.optimize === true ||
+      Object.keys(requested.compression || {}).some((k) => k !== "container") ||
+      requested.mode !== undefined ||
+      o.optimize === true ||
       o.metadata === "strip" ||
       dest.directory ||
       o.pdf.pages !== "all";
