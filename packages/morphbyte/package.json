@@ -1,6 +1,6 @@
 {
   "name": "morphbyte",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Image, PDF and structured-data conversion for Node.js and Bun",
   "license": "MIT",
   "type": "module",

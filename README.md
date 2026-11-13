@@ -2,7 +2,7 @@
 
 MorphByte is an asynchronous Node.js/Bun **library** for image, PDF, structured-data and reversible binary conversions. Every basic conversion requires only `input` and `output`.
 
-Current version: **0.1.1**. See [CHANGELOG.md](CHANGELOG.md) for changes and [CONTRIBUTING.md](CONTRIBUTING.md) for code style, source layout and development checks.
+Current version: **0.1.2**. See [CHANGELOG.md](CHANGELOG.md) for changes and [CONTRIBUTING.md](CONTRIBUTING.md) for code style, source layout and development checks.
 
 MorphByte is a development preview. Images use Sharp's native libvips bindings. PDF reading and rendering use PDFium WebAssembly in worker threads; PDF writing uses pdf-lib. The optional C++23 Base64 addon has not been compiled on the development host, which lacks a C++ compiler. See [progress](docs/progress.md) for the remaining work.
 
