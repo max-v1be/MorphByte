@@ -123,6 +123,100 @@ test("explicit compression modes re-encode same-format images at every defaults 
   );
 });
 
+test("configured route inspection honors buffer hints, limits and cancellation", async () =>
+{
+  const input = Buffer.from("name: route fixture");
+  const converter = m.createConverter({
+    routeDefaults: { "yaml:json": { timeoutMs: 1234 } },
+
+  });
+
+  const result = await converter.convert(input, { format: "json" }, { from: "yaml" });
+
+  assert.equal(result.sourceFormat, "yaml");
+  assert.equal(result.effectiveOptions.timeoutMs, 1234);
+  assert.equal(JSON.parse(Buffer.from(result.outputs[0].bytes)).name, "route fixture");
+  assert.equal(
+    (
+      await converter.convert(
+        input,
+        { format: "json" },
+
+        { from: "yaml", timeoutMs: 2345 },
+
+      )
+    ).effectiveOptions.timeoutMs,
+    2345,
+  );
+  await assert.rejects(
+    converter.convertBuffer(input, "json", { from: "yaml", maxInputBytes: 1 }),
+
+    hasCode("LIMIT_EXCEEDED"),
+  );
+
+  const controller = new AbortController();
+
+  controller.abort();
+  await assert.rejects(
+    converter.convertBuffer(input, "json", { from: "yaml", signal: controller.signal }),
+
+    hasCode("ABORTED"),
+  );
+  await assert.rejects(
+    converter.convertBuffer(await image(), "json", { from: "jpeg" }),
+
+    hasCode("INVALID_INPUT"),
+  );
+});
+
+test("configured custom binary routes use their explicit source hint", async () =>
+{
+  const id = "routebinary";
+  const input = Buffer.from([0, 1, 2, 255]);
+
+  try
+  {
+    m.registerFormat({ id, extensions: [id], mimeTypes: ["application/x-routebinary"] });
+
+    m.registerConverter({
+      from: id,
+      to: "json",
+      convert: async ({ input, options }) =>
+        Buffer.from(
+          JSON.stringify({
+            bytes: [...input],
+            timeoutMs: options.timeoutMs,
+          }),
+
+        ),
+    });
+
+    const converter = m.createConverter({
+      routeDefaults: { "routebinary:json": { timeoutMs: 1234 } },
+
+    });
+
+    const output = await converter.convertBuffer(input, "json", { from: id });
+
+    assert.deepEqual(JSON.parse(Buffer.from(output)), {
+      bytes: [...input],
+      timeoutMs: 1234,
+    });
+
+    await assert.rejects(
+      converter.convertBuffer(input, "json", { from: id, maxInputBytes: 1 }),
+
+      hasCode("LIMIT_EXCEEDED"),
+    );
+  }
+
+  finally
+  {
+    m.unregisterFormat(id);
+  }
+
+});
+
 test("build info reports the package manifest version", async () =>
 {
   const manifest = JSON.parse(

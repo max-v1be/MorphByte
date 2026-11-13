@@ -423,13 +423,42 @@ function createConverter({
     );
   const layers = async (input, output, options) =>
   {
-    const dest = await target(output, merge(saved, options));
-    const source = Object.keys(routes).length ? await detect(input) : undefined;
+    const initial = merge(saved, options);
+
+    checkSignal(initial.signal);
+    const dest = await target(output, initial);
+    let from;
+
+    if (Object.keys(routes).length)
+    {
+      const inspection = merge(saved, formats[dest.format], options);
+      const hint = registry.normalize(
+        inspection.from || (typeof input === "string" ? pathFormat(input).format : ""),
+      );
+
+      if (registry.formats.get(hint)?.custom)
+      {
+        from = hint;
+      }
+
+      else
+      {
+        const { compression, mode, ...sourceOptions } = publicOptions(inspection);
+        const source = await runWorker(
+          { action: "detect", input, to: "json", options: sourceOptions },
+
+          inspection.signal,
+        );
+
+        from = source.format;
+      }
+
+    }
 
     return mergeConfigured(
       saved,
       formats[dest.format],
-      source ? routes[`${source.format}:${dest.format}`] : undefined,
+      from ? routes[`${from}:${dest.format}`] : undefined,
     );
   };
 
