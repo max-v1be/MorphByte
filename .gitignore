@@ -4,6 +4,7 @@ build/
 dist/
 packages/morphbyte/docs/
 packages/morphbyte/README.md
+packages/morphbyte/CHANGELOG.md
 packages/morphbyte/CONTRIBUTING.md
 packages/morphbyte/LICENSE
 packages/morphbyte/THIRD_PARTY_NOTICES.md

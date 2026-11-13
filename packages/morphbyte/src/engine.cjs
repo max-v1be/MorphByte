@@ -5,7 +5,8 @@ const { fail, MorphByteError, checkSignal, normalizedError } = require("./errors
 const { merge, mergeConfigured, resolve, concurrency } = require("./options.cjs");
 const { pathFormat, readBounded } = require("./detection.cjs");
 const { runWorker, queueLimit } = require("./worker-pool.cjs");
-const { target, checkAlias, commit } = require("./output.cjs");
+const { target, resolveWrapper, checkAlias, commit } = require("./output.cjs");
+const { version } = require("../package.json");
 
 
 function publicOptions(o)
@@ -53,10 +54,7 @@ async function resolveOptions(input, output, options)
   const dest = await target(output, o);
   const result = resolve(dest.format, options);
 
-  result.options.compression.container.algorithm =
-    dest.wrapper !== "none"
-      ? dest.wrapper
-      : result.options.compression.container.algorithm;
+  resolveWrapper(dest, result.options);
   const source = await runWorker(
     { action: "detect", input, to: "json", options: publicOptions(o) },
 
@@ -83,29 +81,7 @@ async function convertWith(defaults, input, output, options)
     resolved = resolve(dest.format, defaults, options),
     o = resolved.options;
 
-  if (dest.wrapper !== "none")
-  {
-    if (
-      o.compression.container.algorithm !== "none" &&
-      o.compression.container.algorithm !== dest.wrapper
-    )
-    {
-      fail(
-        "UNSUPPORTED_OPTION",
-        "Output suffix conflicts with selected compression wrapper",
-      );
-    }
-
-    o.compression.container.algorithm = dest.wrapper;
-  }
-
-  else if (dest.path && o.compression.container.algorithm !== "none")
-  {
-    fail(
-      "UNSUPPORTED_OPTION",
-      "Compressed file output needs a compound wrapper extension",
-    );
-  }
+  resolveWrapper(dest, o);
 
   if (dest.path)
   {
@@ -260,16 +236,13 @@ async function convertWith(defaults, input, output, options)
       fail("UNSUPPORTED_CONVERSION", `No registered converter ${hint} -> ${dest.format}`);
     }
 
-    const combined = merge(defaults, options),
-      requestedCompression = {
-        ...defaults?.compression,
-        ...options?.compression,
-      };
+    const requested = mergeConfigured(defaults, options);
 
     const modify =
-      Object.keys(requestedCompression).some((k) => k !== "container") ||
-      combined.optimize === true ||
-      options?.metadata === "strip" ||
+      Object.keys(requested.compression || {}).some((k) => k !== "container") ||
+      requested.mode !== undefined ||
+      o.optimize === true ||
+      o.metadata === "strip" ||
       dest.directory ||
       o.pdf.pages !== "all";
 
@@ -306,11 +279,22 @@ async function convertBufferWith(convertFn, input, output, options)
     fail("INVALID_INPUT", "convertBuffer expects Uint8Array");
   }
 
-  const result = await convertFn(
-    input,
-    typeof output === "string" ? { format: output } : output,
-    options,
-  );
+  const dest = typeof output === "string" ? { format: output } : output;
+
+  if (
+    !dest ||
+    typeof dest !== "object" ||
+    Array.isArray(dest) ||
+    typeof dest.format !== "string" ||
+    !dest.format ||
+    "directory" in dest ||
+    Object.keys(dest).some((key) => key !== "format")
+  )
+  {
+    fail("INVALID_INPUT", "convertBuffer requires a format or a format-only target");
+  }
+
+  const result = await convertFn(input, { format: dest.format }, options);
 
   if (result.outputs.length !== 1 || !result.outputs[0].bytes)
   {
@@ -443,20 +427,55 @@ function createConverter({
 
   const saved = cloneOptions(defaults),
     formats = Object.fromEntries(
-      Object.entries(formatDefaults).map(([k, v]) => [k, cloneOptions(v)]),
+      Object.entries(formatDefaults).map(([k, v]) => [
+        registry.normalize(k),
+        cloneOptions(v),
+      ]),
     ),
     routes = Object.fromEntries(
-      Object.entries(routeDefaults).map(([k, v]) => [k, cloneOptions(v)]),
+      Object.entries(routeDefaults).map(([k, v]) => [
+        k.split(":").map(registry.normalize).join(":"),
+        cloneOptions(v),
+      ]),
     );
   const layers = async (input, output, options) =>
   {
-    const dest = await target(output, merge(saved, options));
-    const source = Object.keys(routes).length ? await detect(input) : undefined;
+    const initial = merge(saved, options);
+
+    checkSignal(initial.signal);
+    const dest = await target(output, initial);
+    let from;
+
+    if (Object.keys(routes).length)
+    {
+      const inspection = merge(saved, formats[dest.format], options);
+      const hint = registry.normalize(
+        inspection.from || (typeof input === "string" ? pathFormat(input).format : ""),
+      );
+
+      if (registry.formats.get(hint)?.custom)
+      {
+        from = hint;
+      }
+
+      else
+      {
+        const { compression, mode, ...sourceOptions } = publicOptions(inspection);
+        const source = await runWorker(
+          { action: "detect", input, to: "json", options: sourceOptions },
+
+          inspection.signal,
+        );
+
+        from = source.format;
+      }
+
+    }
 
     return mergeConfigured(
       saved,
       formats[dest.format],
-      source ? routes[`${source.format}:${dest.format}`] : undefined,
+      from ? routes[`${from}:${dest.format}`] : undefined,
     );
   };
 
@@ -465,15 +484,21 @@ function createConverter({
       convertWith(await layers(input, output, options), input, output, options),
     convertBuffer: (input, output, options) =>
       convertBufferWith(instance.convert, input, output, options),
-    getDefaultOptions: (args = {}) =>
-      publicOptions(
+    getDefaultOptions: ({ from, to } = {}) =>
+    {
+      const targetFormat = registry.normalize(to || "json");
+      const sourceFormat = registry.normalize(from);
+
+      return publicOptions(
         resolve(
-          args.to || "json",
+          targetFormat,
           saved,
-          formats[args.to],
-          routes[`${args.from}:${args.to}`],
+          formats[targetFormat],
+          routes[`${sourceFormat}:${targetFormat}`],
         ).options,
-      ),
+      );
+    },
+
   };
 
   return instance;
@@ -556,7 +581,7 @@ Object.assign(exports, {
 
     return {
       name: "MorphByte",
-      version: "0.1.0",
+      version,
       platform: process.platform,
       arch: process.arch,
       runtime: process.versions.bun ? "bun" : "node",

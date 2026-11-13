@@ -1,0 +1,21 @@
+# Changelog
+
+## 0.1.2 — 2026-11-13
+
+- Reject negative, non-finite and nonnumeric custom converter costs before registration. Zero-cost cycles terminate and valid fractional costs remain supported.
+- Honor explicitly selected compression modes for same-format conversions, including modes inherited from converter defaults. Calls without requested changes retain exact byte copies.
+- Apply source hints, input limits and cancellation during configured route inspection. Custom binary routes with a registered source hint no longer fail built-in signature detection.
+- Reject invalid `convertBuffer()` output targets before conversion, preventing directory targets from writing files before returning an error.
+- Normalize format aliases and case consistently in converter default keys, default-option queries, route keys and textual source hints.
+
+## 0.1.1 — 2026-11-13
+
+- Apply `metadata: "strip"` from converter global, format and route defaults to same-format image conversions. Per-call overrides retain their precedence; unchanged conversions still copy exact bytes.
+- Make `resolveOptions()` and `convert()` enforce the same output compression rules. Conflicting suffixes and algorithms, or compressed file targets without a compound suffix, fail with `UNSUPPORTED_OPTION`.
+- Read `getBuildInfo().version` from the package manifest so runtime diagnostics match the installed package.
+- Raise the minimum `fast-xml-parser` version to 5.12.0 for [GHSA-474x-hrwr-fgx4](https://github.com/NaturalIntelligence/fast-xml-parser/security/advisories/GHSA-474x-hrwr-fgx4); update the lockfile and its required `is-unsafe` dependency. MorphByte does not enable the affected `stopNodes` option.
+- Add regression coverage for metadata policies, wrapper resolution and package version reporting. Include this changelog in the npm package.
+
+## 0.1.0
+
+- Initial development preview: image, PDF, structured-data, Base64 and binary-envelope conversion; bounded workers, cancellation, limits and atomic file output.

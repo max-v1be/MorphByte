@@ -17,6 +17,509 @@ const image = () =>
     .toBuffer();
 const hasCode = (code) => (e) => e.code === code;
 
+test("custom route costs reject invalid values and zero-cost cycles terminate", async () =>
+{
+  const ids = ["costa", "costb", "costc", "costunreachable"];
+
+  try
+  {
+    for (const id of ids)
+    {
+      m.registerFormat({ id, extensions: [id], mimeTypes: [`application/x-${id}`] });
+
+    }
+
+    const convert = async ({ input }) => input;
+
+    for (const cost of [-1, -Infinity, Infinity, NaN, null, "1"])
+    {
+      assert.throws(
+        () => m.registerConverter({ from: "costa", to: "costb", cost, convert }),
+
+        TypeError,
+      );
+    }
+
+    m.registerConverter({ from: "costa", to: "costb", cost: 0, convert });
+
+    m.registerConverter({ from: "costb", to: "costa", cost: 0, convert });
+
+    m.registerConverter({ from: "costb", to: "costc", cost: 0.5, convert });
+
+    m.registerConverter({ from: "costa", to: "costc", convert });
+
+    assert.equal(m.canConvert("costa", "costunreachable"), false);
+
+    const result = await m.convert(
+      Buffer.from("route fixture"),
+      { format: "costc" },
+
+      { from: "costa" },
+
+    );
+
+    assert.deepEqual(result.conversionPath, ["costa", "costb", "costc"]);
+  }
+
+  finally
+  {
+    for (const id of ids)
+    {
+      m.unregisterFormat(id);
+    }
+
+  }
+
+});
+
+test("explicit compression modes re-encode same-format images at every defaults layer", async () =>
+{
+  const input = await sharp(await image())
+    .png({ compressionLevel: 0 })
+
+    .toBuffer();
+  const cases = [
+    [m, { mode: "smallest" }],
+
+    [m.createConverter({ defaults: { mode: "smallest" } }), {}],
+
+    [m.createConverter({ formatDefaults: { png: { mode: "smallest" } } }), {}],
+
+    [m.createConverter({ routeDefaults: { "png:png": { mode: "smallest" } } }), {}],
+
+  ];
+
+  for (const [converter, options] of cases)
+  {
+    const result = await converter.convert(input, { format: "png" }, options);
+    const output = Buffer.from(result.outputs[0].bytes);
+
+    assert.equal(result.backend, "sharp/libvips");
+    assert.equal(result.effectiveOptions.compression.level, 9);
+    assert.ok(output.length < input.length);
+    assert.deepEqual(
+      await sharp(output).raw().toBuffer(),
+      await sharp(input).raw().toBuffer(),
+    );
+  }
+
+  const converter = m.createConverter({ defaults: { mode: "smallest" } });
+
+  const overridden = await converter.convert(
+    input,
+    { format: "png" },
+
+    { mode: "fastest" },
+
+  );
+
+  assert.equal(overridden.effectiveOptions.compression.level, 1);
+  assert.equal(overridden.backend, "sharp/libvips");
+  assert.deepEqual(Buffer.from(await m.convertBuffer(input, "png")), input);
+  assert.deepEqual(
+    Buffer.from(await m.convertBuffer(input, "png", { mode: undefined })),
+
+    input,
+  );
+});
+
+test("configured route inspection honors buffer hints, limits and cancellation", async () =>
+{
+  const input = Buffer.from("name: route fixture");
+  const converter = m.createConverter({
+    routeDefaults: { "yaml:json": { timeoutMs: 1234 } },
+
+  });
+
+  const result = await converter.convert(input, { format: "json" }, { from: "yaml" });
+
+  assert.equal(result.sourceFormat, "yaml");
+  assert.equal(result.effectiveOptions.timeoutMs, 1234);
+  assert.equal(JSON.parse(Buffer.from(result.outputs[0].bytes)).name, "route fixture");
+  assert.equal(
+    (
+      await converter.convert(
+        input,
+        { format: "json" },
+
+        { from: "yaml", timeoutMs: 2345 },
+
+      )
+    ).effectiveOptions.timeoutMs,
+    2345,
+  );
+  await assert.rejects(
+    converter.convertBuffer(input, "json", { from: "yaml", maxInputBytes: 1 }),
+
+    hasCode("LIMIT_EXCEEDED"),
+  );
+
+  const controller = new AbortController();
+
+  controller.abort();
+  await assert.rejects(
+    converter.convertBuffer(input, "json", { from: "yaml", signal: controller.signal }),
+
+    hasCode("ABORTED"),
+  );
+  await assert.rejects(
+    converter.convertBuffer(await image(), "json", { from: "jpeg" }),
+
+    hasCode("INVALID_INPUT"),
+  );
+});
+
+test("configured custom binary routes use their explicit source hint", async () =>
+{
+  const id = "routebinary";
+  const input = Buffer.from([0, 1, 2, 255]);
+
+  try
+  {
+    m.registerFormat({ id, extensions: [id], mimeTypes: ["application/x-routebinary"] });
+
+    m.registerConverter({
+      from: id,
+      to: "json",
+      convert: async ({ input, options }) =>
+        Buffer.from(
+          JSON.stringify({
+            bytes: [...input],
+            timeoutMs: options.timeoutMs,
+          }),
+
+        ),
+    });
+
+    const converter = m.createConverter({
+      routeDefaults: { "routebinary:json": { timeoutMs: 1234 } },
+
+    });
+
+    const output = await converter.convertBuffer(input, "json", { from: id });
+
+    assert.deepEqual(JSON.parse(Buffer.from(output)), {
+      bytes: [...input],
+      timeoutMs: 1234,
+    });
+
+    await assert.rejects(
+      converter.convertBuffer(input, "json", { from: id, maxInputBytes: 1 }),
+
+      hasCode("LIMIT_EXCEEDED"),
+    );
+  }
+
+  finally
+  {
+    m.unregisterFormat(id);
+  }
+
+});
+
+test("convertBuffer rejects file targets before conversion or filesystem writes", async () =>
+{
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "morphbyte-buffer-target-"));
+
+  try
+  {
+    const pdf = await m.convertBuffer(
+      Buffer.from("{\"message\":\"Buffer target fixture\"}"),
+      "pdf",
+    );
+    const controller = new AbortController();
+
+    controller.abort();
+    const converters = [
+      m,
+      m.createConverter({ defaults: { signal: controller.signal } }),
+
+    ];
+    const invalid = [
+      { directory: dir, format: "png" },
+
+      { directory: dir },
+
+      { format: "png", path: path.join(dir, "out.png") },
+
+      Object.assign(Object.create({ directory: dir }), { format: "png" }),
+
+      {},
+
+      [],
+      null,
+      "",
+    ];
+
+    for (const converter of converters)
+    {
+      for (const target of invalid)
+      {
+        await assert.rejects(
+          converter.convertBuffer(pdf, target),
+          hasCode("INVALID_INPUT"),
+        );
+        assert.deepEqual(await fs.readdir(dir), []);
+      }
+
+    }
+
+    assert.ok((await m.convertBuffer(pdf, { format: "png" })).length);
+  }
+
+  finally
+  {
+    await fs.rm(dir, { recursive: true, force: true });
+
+  }
+
+});
+
+test("configured defaults normalize format aliases in keys, queries and source hints", async () =>
+{
+  const input = await image();
+
+  for (const [formatKey, routeKey] of [
+    ["jpeg", "png:jpeg"],
+    ["JPG", "PNG:JPG"],
+  ])
+  {
+    const converter = m.createConverter({
+      formatDefaults: { [formatKey]: { compression: { quality: 33 } } },
+
+      routeDefaults: { [routeKey]: { compression: { quality: 44 } } },
+
+    });
+
+    for (const to of ["jpeg", "jpg", "JPG"])
+    {
+      assert.equal(converter.getDefaultOptions({ to }).compression.quality, 33);
+      assert.equal(
+        converter.getDefaultOptions({ from: "PNG", to }).compression.quality,
+        44,
+      );
+
+      const result = await converter.convert(input, { format: to });
+
+      assert.equal(result.effectiveOptions.compression.quality, 44);
+      assert.equal((await sharp(result.outputs[0].bytes).metadata()).format, "jpeg");
+    }
+
+  }
+
+  const converter = m.createConverter({
+    formatDefaults: { JSON: { metadata: "strip" } },
+
+    routeDefaults: { "YML:JSON": { timeoutMs: 2345 } },
+
+  });
+
+  assert.equal(converter.getDefaultOptions().metadata, "strip");
+  assert.equal(converter.getDefaultOptions({ from: "yaml", to: "json" }).timeoutMs, 2345);
+  const result = await converter.convert(
+    Buffer.from("name: alias fixture"),
+    { format: "JSON" },
+
+    { from: "YML" },
+
+  );
+
+  assert.equal(result.effectiveOptions.timeoutMs, 2345);
+  assert.equal(result.sourceFormat, "yaml");
+  assert.equal(JSON.parse(Buffer.from(result.outputs[0].bytes)).name, "alias fixture");
+});
+
+test("build info reports the package manifest version", async () =>
+{
+  const manifest = JSON.parse(
+    await fs.readFile(new URL("../morphbyte/package.json", import.meta.url), "utf8"),
+  );
+
+  assert.equal(m.getBuildInfo().version, manifest.version);
+});
+
+test("same-format metadata stripping honors every converter defaults layer", async () =>
+{
+  const input = await sharp(await image())
+    .withMetadata({ exif: { IFD0: { Artist: "Metadata regression fixture" } } })
+
+    .png()
+    .toBuffer();
+  const original = await sharp(input).metadata();
+
+  assert.ok(original.exif);
+  assert.ok(original.icc);
+
+  const converters = [
+    m.createConverter({ defaults: { metadata: "strip" } }),
+
+    m.createConverter({ formatDefaults: { png: { metadata: "strip" } } }),
+
+    m.createConverter({ routeDefaults: { "png:png": { metadata: "strip" } } }),
+
+  ];
+
+  for (const converter of converters)
+  {
+    const result = await converter.convert(input, { format: "png" });
+
+    const output = Buffer.from(result.outputs[0].bytes);
+    const metadata = await sharp(output).metadata();
+
+    assert.equal(result.effectiveOptions.metadata, "strip");
+    assert.equal(metadata.exif, undefined);
+    assert.equal(metadata.icc, undefined);
+    assert.deepEqual(
+      await sharp(output).raw().toBuffer(),
+      await sharp(input).raw().toBuffer(),
+    );
+
+    const overridden = await converter.convertBuffer(input, "png", { metadata: "safe" });
+
+    assert.deepEqual(Buffer.from(overridden), input);
+  }
+
+  const direct = await m.convertBuffer(input, "png", { metadata: "strip" });
+
+  assert.equal((await sharp(direct).metadata()).exif, undefined);
+  assert.deepEqual(Buffer.from(await m.convertBuffer(input, "png")), input);
+});
+
+test("metadata defaults preserve route > format > global precedence", async () =>
+{
+  const input = await sharp(await image())
+    .withMetadata()
+    .png()
+    .toBuffer();
+  const converter = m.createConverter({
+    defaults: { metadata: "strip" },
+
+    formatDefaults: { png: { metadata: "safe" } },
+
+    routeDefaults: { "png:png": { metadata: "strip" } },
+
+  });
+
+  const output = await converter.convertBuffer(input, "png");
+
+  assert.equal((await sharp(output).metadata()).exif, undefined);
+
+  const formatOverride = m.createConverter({
+    defaults: { metadata: "strip" },
+
+    formatDefaults: { png: { metadata: "safe" } },
+
+  });
+
+  assert.deepEqual(Buffer.from(await formatOverride.convertBuffer(input, "png")), input);
+});
+
+test("resolveOptions and convert reject the same output wrapper conflicts without writes", async () =>
+{
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "morphbyte-wrapper-errors-"));
+
+  try
+  {
+    for (const [filename, algorithm] of [
+      ["out.json.gz", "brotli"],
+      ["out.json.br", "gzip"],
+      ["out.json", "gzip"],
+    ])
+    {
+      const options = { compression: { container: { algorithm } } };
+
+      const errors = [];
+
+      for (const method of [m.resolveOptions, m.convert])
+      {
+        await assert.rejects(
+          method(Buffer.from("{}"), path.join(dir, filename), options),
+          (error) =>
+          {
+            assert.ok(error instanceof m.MorphByteError);
+            assert.equal(error.code, "UNSUPPORTED_OPTION");
+            errors.push(error.message);
+
+            return true;
+          },
+
+        );
+      }
+
+      assert.equal(errors[0], errors[1]);
+      assert.deepEqual(await fs.readdir(dir), []);
+    }
+
+  }
+
+  finally
+  {
+    await fs.rm(dir, { recursive: true, force: true });
+
+  }
+
+});
+
+test("resolveOptions and convert agree on inferred and explicit output wrappers", async () =>
+{
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "morphbyte-wrapper-options-"));
+  const input = Buffer.from("{ \"value\": 42 }");
+
+  try
+  {
+    for (const [filename, algorithm, options] of [
+      ["inferred.json.gz", "gzip", {}],
+
+      ["explicit.json.gz", "gzip", { compression: { container: { algorithm: "gzip" } } }],
+
+      ["inferred.json.br", "brotli", {}],
+
+      [
+        "explicit.json.br",
+        "brotli",
+        { compression: { container: { algorithm: "brotli" } } },
+
+      ],
+      ["plain.json", "none", {}],
+
+    ])
+    {
+      const output = path.join(dir, filename);
+      const resolved = await m.resolveOptions(input, output, options);
+
+      await assert.rejects(fs.stat(output), (error) => error.code === "ENOENT");
+      assert.equal(resolved.compression.container.algorithm, algorithm);
+
+      const result = await m.convert(input, output, options);
+
+      assert.equal(result.effectiveOptions.compression.container.algorithm, algorithm);
+
+      const restored = await m.convert(output, { format: "json" });
+
+      assert.deepEqual(Buffer.from(restored.outputs[0].bytes), input);
+    }
+
+    const options = { compression: { container: { algorithm: "gzip" } } };
+
+    const resolved = await m.resolveOptions(input, { format: "json" }, options);
+    const result = await m.convert(input, { format: "json" }, options);
+
+    assert.equal(resolved.compression.container.algorithm, "gzip");
+    assert.equal(result.effectiveOptions.compression.container.algorithm, "gzip");
+    assert.deepEqual(
+      Buffer.from(await m.convertBuffer(result.outputs[0].bytes, "json")),
+      input,
+    );
+  }
+
+  finally
+  {
+    await fs.rm(dir, { recursive: true, force: true });
+
+  }
+
+});
+
 test("configured convertBuffer validates input before opening files", async () =>
 {
   const converter = m.createConverter();
