@@ -5,6 +5,7 @@
 - Reject negative, non-finite and nonnumeric custom converter costs before registration. Zero-cost cycles terminate and valid fractional costs remain supported.
 - Honor explicitly selected compression modes for same-format conversions, including modes inherited from converter defaults. Calls without requested changes retain exact byte copies.
 - Apply source hints, input limits and cancellation during configured route inspection. Custom binary routes with a registered source hint no longer fail built-in signature detection.
+- Reject invalid `convertBuffer()` output targets before conversion, preventing directory targets from writing files before returning an error.
 
 ## 0.1.1 — 2026-11-13
 

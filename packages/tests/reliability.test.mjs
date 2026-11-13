@@ -217,6 +217,64 @@ test("configured custom binary routes use their explicit source hint", async () 
 
 });
 
+test("convertBuffer rejects file targets before conversion or filesystem writes", async () =>
+{
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "morphbyte-buffer-target-"));
+
+  try
+  {
+    const pdf = await m.convertBuffer(
+      Buffer.from("{\"message\":\"Buffer target fixture\"}"),
+      "pdf",
+    );
+    const controller = new AbortController();
+
+    controller.abort();
+    const converters = [
+      m,
+      m.createConverter({ defaults: { signal: controller.signal } }),
+
+    ];
+    const invalid = [
+      { directory: dir, format: "png" },
+
+      { directory: dir },
+
+      { format: "png", path: path.join(dir, "out.png") },
+
+      Object.assign(Object.create({ directory: dir }), { format: "png" }),
+
+      {},
+
+      [],
+      null,
+      "",
+    ];
+
+    for (const converter of converters)
+    {
+      for (const target of invalid)
+      {
+        await assert.rejects(
+          converter.convertBuffer(pdf, target),
+          hasCode("INVALID_INPUT"),
+        );
+        assert.deepEqual(await fs.readdir(dir), []);
+      }
+
+    }
+
+    assert.ok((await m.convertBuffer(pdf, { format: "png" })).length);
+  }
+
+  finally
+  {
+    await fs.rm(dir, { recursive: true, force: true });
+
+  }
+
+});
+
 test("build info reports the package manifest version", async () =>
 {
   const manifest = JSON.parse(

@@ -279,11 +279,22 @@ async function convertBufferWith(convertFn, input, output, options)
     fail("INVALID_INPUT", "convertBuffer expects Uint8Array");
   }
 
-  const result = await convertFn(
-    input,
-    typeof output === "string" ? { format: output } : output,
-    options,
-  );
+  const dest = typeof output === "string" ? { format: output } : output;
+
+  if (
+    !dest ||
+    typeof dest !== "object" ||
+    Array.isArray(dest) ||
+    typeof dest.format !== "string" ||
+    !dest.format ||
+    "directory" in dest ||
+    Object.keys(dest).some((key) => key !== "format")
+  )
+  {
+    fail("INVALID_INPUT", "convertBuffer requires a format or a format-only target");
+  }
+
+  const result = await convertFn(input, { format: dest.format }, options);
 
   if (result.outputs.length !== 1 || !result.outputs[0].bytes)
   {
