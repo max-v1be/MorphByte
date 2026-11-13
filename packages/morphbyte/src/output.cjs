@@ -78,6 +78,34 @@ async function target(output, o)
 }
 
 
+function resolveWrapper(dest, o)
+{
+  const container = o.compression.container;
+
+  if (dest.wrapper !== "none")
+  {
+    if (container.algorithm !== "none" && container.algorithm !== dest.wrapper)
+    {
+      fail(
+        "UNSUPPORTED_OPTION",
+        "Output suffix conflicts with selected compression wrapper",
+      );
+    }
+
+    container.algorithm = dest.wrapper;
+  }
+
+  else if (dest.path && container.algorithm !== "none")
+  {
+    fail(
+      "UNSUPPORTED_OPTION",
+      "Compressed file output needs a compound wrapper extension",
+    );
+  }
+
+}
+
+
 async function noSymlinks(p)
 {
   let current = path.resolve(p);
@@ -291,4 +319,4 @@ async function commit(outputs, dest, input, o)
 
 }
 
-module.exports = { target, checkAlias, commit };
+module.exports = { target, resolveWrapper, checkAlias, commit };

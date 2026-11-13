@@ -62,6 +62,7 @@ await writeFile(
 );
 for (const file of [
   "README.md",
+  "CHANGELOG.md",
   "CONTRIBUTING.md",
   "LICENSE",
   "THIRD_PARTY_NOTICES.md",

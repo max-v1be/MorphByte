@@ -2,7 +2,7 @@
 
 MorphByte is an asynchronous Node.js/Bun **library** for image, PDF, structured-data and reversible binary conversions. Every basic conversion requires only `input` and `output`.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for code style, source layout and development checks.
+Current version: **0.1.1**. See [CHANGELOG.md](CHANGELOG.md) for changes and [CONTRIBUTING.md](CONTRIBUTING.md) for code style, source layout and development checks.
 
 MorphByte is a development preview. Images use Sharp's native libvips bindings. PDF reading and rendering use PDFium WebAssembly in worker threads; PDF writing uses pdf-lib. The optional C++23 Base64 addon has not been compiled on the development host, which lacks a C++ compiler. See [progress](docs/progress.md) for the remaining work.
 
@@ -83,6 +83,8 @@ const converter = createConverter({
 ```
 
 Options are optional, including `compression:{}`. Precedence is call > route defaults > target-format defaults > consumer defaults > built-in format/global defaults. Consumer defaults are isolated. Unknown or unsupported options fail rather than being silently ignored. Custom adapters execute trusted JavaScript; they must cooperate with cancellation and avoid blocking the event loop.
+
+An effective `metadata:"strip"` policy also re-encodes same-format images when inherited from converter defaults. Without requested changes, same-format conversion remains an exact byte copy. Both `resolveOptions()` and `convert()` reject conflicting output suffixes and compression algorithms; compressed file outputs require the matching compound suffix such as `.json.gz` or `.json.br`.
 
 Results contain `outputs[]`, source/target formats, selected route, fidelity, backend, resolved options, codec selection, warnings, byte counts and duration. File outputs return paths/sizes; `{format:"webp"}` returns bytes. `convertBuffer` returns a single `Uint8Array`. Batch results preserve item order and include each error; `continueOnError` defaults to false.
 

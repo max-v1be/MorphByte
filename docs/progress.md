@@ -18,6 +18,20 @@ Animation preservation, complete transformation breadth, optional document/prese
 
 ## Validation record
 
+### v0.1.1 — 2026-11-13
+
+Verified locally on Windows x64 with Node 26.10.0 and Bun 1.4.4:
+
+- Node and Bun: 42 tests passed in each runtime, 0 failed, 0 skipped. Five new regression tests cover inherited metadata stripping, option precedence, wrapper resolution and manifest version reporting. The metadata and conflicting-wrapper tests were also run against the old implementation and failed before the fixes.
+- JavaScript/declarations build, Allman formatting check, TypeScript `tsc --noEmit` and `git diff --check`: passed.
+- Basic/custom-format examples and ESM/CJS conversion/cancellation smoke checks: passed.
+- The v0.1.1 npm tarball was installed in a separate consumer project and passed Node/Bun ESM/CJS, package-version/changelog, XML, PDF/Unicode, image and exact envelope recovery smoke checks. Offline installation initially lacked cached transitive dependency metadata; installation with registry access succeeded. The fresh consumer resolved `fast-xml-parser` 5.12.1 within the declared range; the workspace lockfile uses 5.12.0.
+- `npm audit --omit=dev`: zero known runtime dependency vulnerabilities after updating `fast-xml-parser` from 5.11.2 to 5.12.0 and its required `is-unsafe` dependency from 2.0.2 to 2.0.3. Other locked dependencies were retained.
+- The optional native addon was not built or tested for this update. Linux, Node 22/24 and the supplied CI workflow were not executed locally. No package publication, push or release tag was performed.
+- `docs/benchmarks/latest.json` remains the unchanged historical v0.1.0 measurement from 2026-11-01; no v0.1.1 performance claim is made.
+
+### v0.1.0 — historical record
+
 Verified on Windows x64 with Node 26.10.0 and Bun 1.4.4:
 
 - Node: 37 tests passed, 0 failed, 0 skipped after the code-style and module cleanup.
@@ -31,6 +45,8 @@ Verified on Windows x64 with Node 26.10.0 and Bun 1.4.4:
 `docs/benchmarks/latest.json` contains raw measured benchmark data and host/codec details. The CMake build attempt failed with `Could not find any Visual Studio installation to use`; no built native binary is counted. Linux/other Node versions and the supplied CI workflow remain unexecuted in this session.
 
 ## Next concrete work
+
+The v0.1.1 stabilization applies the resolved metadata policy to same-format conversions, shares output-wrapper validation between inspection and execution, and reads the runtime version from the package manifest. The package now includes its changelog and the consumer smoke validates the installed version and XML dependency behavior.
 
 The code review separated worker scheduling and file commits from the public API, consolidated option merging and buffer-result validation, removed unused imports and redundant example comments, and added regression checks for configured buffer input and worker error messages. JavaScript/TypeScript use checked Allman formatting; C++ follows the same brace style with camelCase local names. `CONTRIBUTING.md` describes these conventions. The optional native addon still needs compilation and runtime verification.
 

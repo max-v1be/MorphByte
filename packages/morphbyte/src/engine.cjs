@@ -5,7 +5,8 @@ const { fail, MorphByteError, checkSignal, normalizedError } = require("./errors
 const { merge, mergeConfigured, resolve, concurrency } = require("./options.cjs");
 const { pathFormat, readBounded } = require("./detection.cjs");
 const { runWorker, queueLimit } = require("./worker-pool.cjs");
-const { target, checkAlias, commit } = require("./output.cjs");
+const { target, resolveWrapper, checkAlias, commit } = require("./output.cjs");
+const { version } = require("../package.json");
 
 
 function publicOptions(o)
@@ -53,10 +54,7 @@ async function resolveOptions(input, output, options)
   const dest = await target(output, o);
   const result = resolve(dest.format, options);
 
-  result.options.compression.container.algorithm =
-    dest.wrapper !== "none"
-      ? dest.wrapper
-      : result.options.compression.container.algorithm;
+  resolveWrapper(dest, result.options);
   const source = await runWorker(
     { action: "detect", input, to: "json", options: publicOptions(o) },
 
@@ -83,29 +81,7 @@ async function convertWith(defaults, input, output, options)
     resolved = resolve(dest.format, defaults, options),
     o = resolved.options;
 
-  if (dest.wrapper !== "none")
-  {
-    if (
-      o.compression.container.algorithm !== "none" &&
-      o.compression.container.algorithm !== dest.wrapper
-    )
-    {
-      fail(
-        "UNSUPPORTED_OPTION",
-        "Output suffix conflicts with selected compression wrapper",
-      );
-    }
-
-    o.compression.container.algorithm = dest.wrapper;
-  }
-
-  else if (dest.path && o.compression.container.algorithm !== "none")
-  {
-    fail(
-      "UNSUPPORTED_OPTION",
-      "Compressed file output needs a compound wrapper extension",
-    );
-  }
+  resolveWrapper(dest, o);
 
   if (dest.path)
   {
@@ -269,7 +245,7 @@ async function convertWith(defaults, input, output, options)
     const modify =
       Object.keys(requestedCompression).some((k) => k !== "container") ||
       combined.optimize === true ||
-      options?.metadata === "strip" ||
+      o.metadata === "strip" ||
       dest.directory ||
       o.pdf.pages !== "all";
 
@@ -556,7 +532,7 @@ Object.assign(exports, {
 
     return {
       name: "MorphByte",
-      version: "0.1.0",
+      version,
       platform: process.platform,
       arch: process.arch,
       runtime: process.versions.bun ? "bun" : "node",

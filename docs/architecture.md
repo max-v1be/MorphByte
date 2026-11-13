@@ -13,6 +13,8 @@ The npm workspace contains one publishable package, `packages/morphbyte`. Runtim
 
 The public API is in `engine.cjs`. Worker scheduling lives in `worker-pool.cjs`; output target resolution, path checks and file commits live in `output.cjs`. Both default resolution and configured converter instances use the option merge code in `options.cjs`.
 
+Output wrapper validation is shared by `resolveOptions()` and conversion execution. A compound output suffix selects its wrapper unless an explicit algorithm conflicts; compressed file output without the corresponding suffix is rejected. Same-format copy is bypassed when the resolved metadata policy is `strip`, including policies inherited from converter defaults. Runtime build information reads the package manifest version.
+
 | Directory | Responsibility |
 |---|---|
 | `packages/core-native` | C++23 Node-API asynchronous Base64 addon source; bounded admission of 8 tasks, RAII-owned input; optional and not locally built |

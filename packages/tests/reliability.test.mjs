@@ -17,6 +17,197 @@ const image = () =>
     .toBuffer();
 const hasCode = (code) => (e) => e.code === code;
 
+test("build info reports the package manifest version", async () =>
+{
+  const manifest = JSON.parse(
+    await fs.readFile(new URL("../morphbyte/package.json", import.meta.url), "utf8"),
+  );
+
+  assert.equal(m.getBuildInfo().version, manifest.version);
+});
+
+test("same-format metadata stripping honors every converter defaults layer", async () =>
+{
+  const input = await sharp(await image())
+    .withMetadata({ exif: { IFD0: { Artist: "Metadata regression fixture" } } })
+
+    .png()
+    .toBuffer();
+  const original = await sharp(input).metadata();
+
+  assert.ok(original.exif);
+  assert.ok(original.icc);
+
+  const converters = [
+    m.createConverter({ defaults: { metadata: "strip" } }),
+
+    m.createConverter({ formatDefaults: { png: { metadata: "strip" } } }),
+
+    m.createConverter({ routeDefaults: { "png:png": { metadata: "strip" } } }),
+
+  ];
+
+  for (const converter of converters)
+  {
+    const result = await converter.convert(input, { format: "png" });
+
+    const output = Buffer.from(result.outputs[0].bytes);
+    const metadata = await sharp(output).metadata();
+
+    assert.equal(result.effectiveOptions.metadata, "strip");
+    assert.equal(metadata.exif, undefined);
+    assert.equal(metadata.icc, undefined);
+    assert.deepEqual(
+      await sharp(output).raw().toBuffer(),
+      await sharp(input).raw().toBuffer(),
+    );
+
+    const overridden = await converter.convertBuffer(input, "png", { metadata: "safe" });
+
+    assert.deepEqual(Buffer.from(overridden), input);
+  }
+
+  const direct = await m.convertBuffer(input, "png", { metadata: "strip" });
+
+  assert.equal((await sharp(direct).metadata()).exif, undefined);
+  assert.deepEqual(Buffer.from(await m.convertBuffer(input, "png")), input);
+});
+
+test("metadata defaults preserve route > format > global precedence", async () =>
+{
+  const input = await sharp(await image())
+    .withMetadata()
+    .png()
+    .toBuffer();
+  const converter = m.createConverter({
+    defaults: { metadata: "strip" },
+
+    formatDefaults: { png: { metadata: "safe" } },
+
+    routeDefaults: { "png:png": { metadata: "strip" } },
+
+  });
+
+  const output = await converter.convertBuffer(input, "png");
+
+  assert.equal((await sharp(output).metadata()).exif, undefined);
+
+  const formatOverride = m.createConverter({
+    defaults: { metadata: "strip" },
+
+    formatDefaults: { png: { metadata: "safe" } },
+
+  });
+
+  assert.deepEqual(Buffer.from(await formatOverride.convertBuffer(input, "png")), input);
+});
+
+test("resolveOptions and convert reject the same output wrapper conflicts without writes", async () =>
+{
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "morphbyte-wrapper-errors-"));
+
+  try
+  {
+    for (const [filename, algorithm] of [
+      ["out.json.gz", "brotli"],
+      ["out.json.br", "gzip"],
+      ["out.json", "gzip"],
+    ])
+    {
+      const options = { compression: { container: { algorithm } } };
+
+      const errors = [];
+
+      for (const method of [m.resolveOptions, m.convert])
+      {
+        await assert.rejects(
+          method(Buffer.from("{}"), path.join(dir, filename), options),
+          (error) =>
+          {
+            assert.ok(error instanceof m.MorphByteError);
+            assert.equal(error.code, "UNSUPPORTED_OPTION");
+            errors.push(error.message);
+
+            return true;
+          },
+
+        );
+      }
+
+      assert.equal(errors[0], errors[1]);
+      assert.deepEqual(await fs.readdir(dir), []);
+    }
+
+  }
+
+  finally
+  {
+    await fs.rm(dir, { recursive: true, force: true });
+
+  }
+
+});
+
+test("resolveOptions and convert agree on inferred and explicit output wrappers", async () =>
+{
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "morphbyte-wrapper-options-"));
+  const input = Buffer.from("{ \"value\": 42 }");
+
+  try
+  {
+    for (const [filename, algorithm, options] of [
+      ["inferred.json.gz", "gzip", {}],
+
+      ["explicit.json.gz", "gzip", { compression: { container: { algorithm: "gzip" } } }],
+
+      ["inferred.json.br", "brotli", {}],
+
+      [
+        "explicit.json.br",
+        "brotli",
+        { compression: { container: { algorithm: "brotli" } } },
+
+      ],
+      ["plain.json", "none", {}],
+
+    ])
+    {
+      const output = path.join(dir, filename);
+      const resolved = await m.resolveOptions(input, output, options);
+
+      await assert.rejects(fs.stat(output), (error) => error.code === "ENOENT");
+      assert.equal(resolved.compression.container.algorithm, algorithm);
+
+      const result = await m.convert(input, output, options);
+
+      assert.equal(result.effectiveOptions.compression.container.algorithm, algorithm);
+
+      const restored = await m.convert(output, { format: "json" });
+
+      assert.deepEqual(Buffer.from(restored.outputs[0].bytes), input);
+    }
+
+    const options = { compression: { container: { algorithm: "gzip" } } };
+
+    const resolved = await m.resolveOptions(input, { format: "json" }, options);
+    const result = await m.convert(input, { format: "json" }, options);
+
+    assert.equal(resolved.compression.container.algorithm, "gzip");
+    assert.equal(result.effectiveOptions.compression.container.algorithm, "gzip");
+    assert.deepEqual(
+      Buffer.from(await m.convertBuffer(result.outputs[0].bytes, "json")),
+      input,
+    );
+  }
+
+  finally
+  {
+    await fs.rm(dir, { recursive: true, force: true });
+
+  }
+
+});
+
 test("configured convertBuffer validates input before opening files", async () =>
 {
   const converter = m.createConverter();

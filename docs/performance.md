@@ -6,6 +6,6 @@ The Sharp comparison uses the same libvips distribution, orientation handling, n
 
 RSS is process-wide and includes other live workers and native/WASM allocations. Sampling every 5 ms can miss transients; use OS tooling for peak-memory certification. No perceptual metric is substituted for the exact decoded-pixel equality check of this matched comparison. Reports include actual errors by failing the benchmark instead of inventing a result.
 
-An initial measurement identified an unnecessary PNG intermediate on no-operation image routes. That serialization was removed; ordered operation pipelines still use materialized intermediates to guarantee exact operation order. Current results are in the JSON report. There is no claim of universal superiority over Sharp, and no unmeasured speedup is advertised.
+An initial measurement identified an unnecessary PNG intermediate on no-operation image routes. That serialization was removed; ordered operation pipelines still use materialized intermediates to guarantee exact operation order. The JSON report retains the historical v0.1.0 measurement from 2026-11-01; it was not rerun for v0.1.1. There is no claim of universal superiority over Sharp, and no unmeasured speedup is advertised.
 
 Additional measured workloads cover JSON/gzip, PDF text/metadata extraction, JPEG binary envelopes and Base64 text. Not yet measured: HEIC, alternate encoders, target-size search, multipage saturation, cold-start distributions, process-isolated crash behavior, repeat-run native leaks, or a representative real-world image corpus.
